@@ -17,7 +17,12 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    const originalRequest = error.config;
+    // Don't trigger global logout if the error came from the login endpoint itself
+    if (
+      (error.response?.status === 401 || error.response?.status === 403) &&
+      !originalRequest.url.includes('/auth/login')
+    ) {
       localStorage.removeItem('lms_token');
       localStorage.removeItem('lms_user');
       window.location.href = '/';

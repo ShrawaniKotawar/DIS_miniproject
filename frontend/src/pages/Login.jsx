@@ -9,6 +9,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loginType, setLoginType] = useState('department');
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -19,7 +20,11 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const { data } = await API.post('/auth/login', { email, password });
+      const { data } = await API.post('/auth/login', { 
+        email, 
+        password, 
+        role: loginType === 'department' ? 'Department' : 'Lab' 
+      });
       login(data.user, data.token);
 
       if (data.user.role === 'Department') {
@@ -102,8 +107,42 @@ export default function Login() {
         
         <div className="w-full max-w-[420px] space-y-10">
           <div className="text-center lg:text-left">
-            <h2 className="text-4xl font-black text-slate-900 tracking-tight">Welcome back</h2>
+            <h2 className="text-4xl font-black text-slate-900 tracking-tight">
+              {loginType === 'department' ? 'Department Login' : 'Lab Login'}
+            </h2>
             <p className="text-slate-500 mt-3 text-lg font-medium">Please enter your details to sign in</p>
+          </div>
+
+          {/* Login Type Toggle */}
+          <div className="flex p-1 bg-slate-100/80 rounded-2xl w-full border border-slate-200/60 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setLoginType('department')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl transition-all duration-300 ${
+                loginType === 'department'
+                  ? 'bg-white text-blue-700 shadow-md ring-1 ring-slate-900/5'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+              }`}
+            >
+              <svg className={`w-5 h-5 ${loginType === 'department' ? 'text-blue-600' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
+              Department
+            </button>
+            <button
+              type="button"
+              onClick={() => setLoginType('lab')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl transition-all duration-300 ${
+                loginType === 'lab'
+                  ? 'bg-white text-blue-700 shadow-md ring-1 ring-slate-900/5'
+                  : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+              }`}
+            >
+              <svg className={`w-5 h-5 ${loginType === 'lab' ? 'text-blue-600' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+              Lab
+            </button>
           </div>
 
           {/* Action Card for Registration */}
@@ -195,15 +234,40 @@ export default function Login() {
 
           {/* Sample credentials hint */}
           <div className="p-6 bg-slate-100 rounded-3xl border border-slate-200">
-            <p className="text-sm font-black text-slate-800 mb-3 ml-1 uppercase tracking-wider opacity-60">Test Credentials</p>
+            <p className="text-sm font-black text-slate-800 mb-3 ml-1 uppercase tracking-wider opacity-60">Test Credentials (Click to fill)</p>
             <div className="space-y-2 text-sm">
-                <div className="flex justify-between items-center group">
+                <div 
+                  className="flex justify-between items-center group cursor-pointer hover:bg-slate-200/50 p-1.5 -ml-1.5 rounded-xl transition-colors"
+                  onClick={() => {
+                    setEmail('dept.it@college.edu');
+                    setPassword('dept@123');
+                    setLoginType('department');
+                  }}
+                >
                     <span className="text-slate-500 font-medium">Department</span>
                     <span className="text-slate-900 font-bold bg-white px-3 py-1 rounded-lg border border-slate-200 group-hover:border-blue-300 transition-colors">dept.it@college.edu / dept@123</span>
                 </div>
-                <div className="flex justify-between items-center group">
-                    <span className="text-slate-500 font-medium">Lab Admin</span>
-                    <span className="text-slate-900 font-bold bg-white px-3 py-1 rounded-lg border border-slate-200 group-hover:border-blue-300 transition-colors">dbms.lab@college.edu / lab@123</span>
+                <div 
+                  className="flex justify-between items-center group cursor-pointer hover:bg-slate-200/50 p-1.5 -ml-1.5 rounded-xl transition-colors"
+                  onClick={() => {
+                    setEmail('dbms.lab@college.edu');
+                    setPassword('lab@123');
+                    setLoginType('lab');
+                  }}
+                >
+                    <span className="text-slate-500 font-medium">Lab 301 (DBMS)</span>
+                    <span className="text-slate-900 font-bold bg-white px-3 py-1 rounded-lg border border-slate-200 group-hover:border-blue-300 transition-colors text-xs sm:text-sm">dbms.lab@college.edu / lab@123</span>
+                </div>
+                <div 
+                  className="flex justify-between items-center group cursor-pointer hover:bg-slate-200/50 p-1.5 -ml-1.5 rounded-xl transition-colors"
+                  onClick={() => {
+                    setEmail('network.lab@college.edu');
+                    setPassword('lab2@123');
+                    setLoginType('lab');
+                  }}
+                >
+                    <span className="text-slate-500 font-medium">Lab 302 (Network)</span>
+                    <span className="text-slate-900 font-bold bg-white px-3 py-1 rounded-lg border border-slate-200 group-hover:border-blue-300 transition-colors text-xs sm:text-sm">network.lab@college.edu / lab2@123</span>
                 </div>
             </div>
           </div>

@@ -8,10 +8,7 @@ const fmt = (n) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0);
 
 const statusBadge = (status) => {
-  const s = (status || '').toLowerCase();
-  if (s === 'active') return <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-100 italic">Active</span>;
-  if (s.includes('repair') || s.includes('maintenance')) return <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100 italic">Under Repair</span>;
-  return <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-50 text-slate-600 border border-slate-100 italic">{status}</span>;
+  return null;
 };
 
 function StatCard({ label, value, color, icon }) {
@@ -53,8 +50,8 @@ export default function LabDashboard() {
   useEffect(() => { fetchData(); }, []);
 
   const totalCost = equipment.reduce((s, e) => s + parseFloat(e.Total_Cost || 0), 0);
-  const activeCount = equipment.filter((e) => (e.Status || '').toLowerCase() === 'active').length;
-  const repairCount = equipment.filter((e) => (e.Status || '').toLowerCase().includes('repair')).length;
+  const totalQuantity = equipment.reduce((s, e) => s + parseInt(e.Quantity || 0), 0);
+  const uniqueCategories = new Set(equipment.map(e => e.Category)).size;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-['Outfit'] pb-20 selection:bg-blue-100">
@@ -117,14 +114,14 @@ export default function LabDashboard() {
             {/* Stat Cards Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
                 <StatCard 
-                    label="Active Assets" 
-                    value={activeCount} 
+                    label="Total Quantity" 
+                    value={totalQuantity} 
                     color="text-green-600"
                     icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
                 />
                 <StatCard 
-                    label="Under Repair" 
-                    value={repairCount} 
+                    label="Categories" 
+                    value={uniqueCategories} 
                     color="text-amber-500"
                     icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
                 />
@@ -157,7 +154,7 @@ export default function LabDashboard() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50/50">
-                      {['#','Asset Details','Model & Brand','Stats','Pricing','Status','Purchased'].map((h) => (
+                      {['#','Supplier Details','Model & Brand','Stats','Pricing','Order Details','Purchased'].map((h) => (
                         <th key={h} className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           {h}
                         </th>
@@ -189,7 +186,7 @@ export default function LabDashboard() {
                         <tr key={eq.Asset_ID} className="hover:bg-blue-50/30 transition-colors group">
                           <td className="px-8 py-6 text-slate-300 font-black text-xs">{(idx + 1).toString().padStart(2, '0')}</td>
                           <td className="px-8 py-6">
-                              <p className="font-black text-slate-900 tracking-tight text-base group-hover:text-blue-600 transition-colors">{eq.Asset_Name}</p>
+                              <p className="font-black text-slate-900 tracking-tight text-base group-hover:text-blue-600 transition-colors">{eq.Supplier_Name}</p>
                               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{eq.Category}</p>
                           </td>
                           <td className="px-8 py-6">
@@ -201,12 +198,22 @@ export default function LabDashboard() {
                                   <span className="text-sm font-black text-slate-900">{eq.Quantity}</span>
                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Units</span>
                               </div>
+                              {eq.Generated_ID && (
+                                  <div className="mt-2 space-y-1">
+                                      {eq.Generated_ID.split(', ').map((tag, i) => (
+                                          <p key={i} className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{tag}</p>
+                                      ))}
+                                  </div>
+                              )}
                           </td>
                           <td className="px-8 py-6">
                               <p className="text-lg font-black text-slate-900 tracking-tighter">{fmt(eq.Total_Cost)}</p>
                               <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{fmt(eq.Unit_Price)} each</p>
                           </td>
-                          <td className="px-8 py-6">{statusBadge(eq.Status)}</td>
+                          <td className="px-8 py-6">
+                              <p className="text-sm font-bold text-slate-700">{eq.Order_No || '—'}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{eq.Warranty || 'No Warranty'}</p>
+                          </td>
                           <td className="px-8 py-6">
                              <p className="text-sm font-bold text-slate-700">
                                 {eq.Purchase_Date ? new Date(eq.Purchase_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Pending'}

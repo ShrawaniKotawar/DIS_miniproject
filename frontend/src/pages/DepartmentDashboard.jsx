@@ -22,10 +22,7 @@ function StatCard({ label, value, sub, color, icon }) {
 }
 
 const statusBadge = (status) => {
-  const s = (status || '').toLowerCase();
-  if (s === 'active') return <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-green-50 text-green-700 border border-green-100 italic">Active</span>;
-  if (s.includes('repair') || s.includes('maintenance')) return <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100 italic">Under Repair</span>;
-  return <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-50 text-slate-600 border border-slate-100 italic">{status}</span>;
+  return null;
 };
 
 const fmt = (n) =>
@@ -64,8 +61,8 @@ export default function DepartmentDashboard() {
 
   const totalAssetValue = equipment.reduce((s, e) => s + parseFloat(e.Total_Cost || 0), 0);
   const totalItems = equipment.reduce((s, e) => s + parseInt(e.Quantity || 0), 0);
-  const activeCount = equipment.filter(e => e.Status === 'Active').length;
-  const repairCount = equipment.filter(e => e.Status?.toLowerCase().includes('repair')).length;
+  const uniqueSuppliers = new Set(equipment.map(e => e.Supplier_Name)).size;
+  const uniqueCategories = new Set(equipment.map(e => e.Category)).size;
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-['Outfit'] pb-20 selection:bg-blue-100">
@@ -129,16 +126,16 @@ export default function DepartmentDashboard() {
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
               />
               <StatCard 
-                label="Active Systems" 
-                value={activeCount} 
-                sub="Operational assets"
+                label="Total Suppliers" 
+                value={uniqueSuppliers} 
+                sub="Active Vendors"
                 color="text-green-600" 
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
               />
               <StatCard 
-                label="Under Repair" 
-                value={repairCount} 
-                sub="Maintenance required"
+                label="Categories" 
+                value={uniqueCategories} 
+                sub="Asset Types"
                 color="text-amber-500" 
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               />
@@ -235,7 +232,7 @@ export default function DepartmentDashboard() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50/50">
-                      {['Asset Details','Specs & Model','Location','Inventory','Value','Health Status','Date Added'].map((h) => (
+                      {['Supplier Details','Specs & Model','Location','Inventory','Value','Order Details','Date Added'].map((h) => (
                         <th key={h} className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           {h}
                         </th>
@@ -256,7 +253,7 @@ export default function DepartmentDashboard() {
                       filteredEquipment.map((eq) => (
                         <tr key={eq.Asset_ID} className="hover:bg-blue-50/30 transition-colors group">
                           <td className="px-8 py-6">
-                              <p className="font-black text-slate-900 tracking-tight text-base group-hover:text-blue-600 transition-colors">{eq.Asset_Name}</p>
+                              <p className="font-black text-slate-900 tracking-tight text-base group-hover:text-blue-600 transition-colors">{eq.Supplier_Name}</p>
                               <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">{eq.Category}</p>
                           </td>
                           <td className="px-8 py-6">
@@ -275,12 +272,22 @@ export default function DepartmentDashboard() {
                                   <span className="text-sm font-black text-slate-900">{eq.Quantity}</span>
                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Units</span>
                               </div>
+                              {eq.Generated_ID && (
+                                  <div className="mt-2 space-y-1">
+                                      {eq.Generated_ID.split(', ').map((tag, i) => (
+                                          <p key={i} className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-white inline-block px-1 rounded border border-slate-100">{tag}</p>
+                                      ))}
+                                  </div>
+                              )}
                           </td>
                           <td className="px-8 py-6">
                               <p className="text-lg font-black text-slate-900 tracking-tighter">{fmt(eq.Total_Cost)}</p>
                               <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{fmt(eq.Unit_Price)} / unit</p>
                           </td>
-                          <td className="px-8 py-6">{statusBadge(eq.Status)}</td>
+                          <td className="px-8 py-6">
+                              <p className="text-sm font-bold text-slate-700">{eq.Order_No || '—'}</p>
+                              <p className="text-[10px] font-bold text-slate-400 mt-0.5 uppercase tracking-widest">{eq.Warranty || 'No Warranty'}</p>
+                          </td>
                           <td className="px-8 py-6">
                               <p className="text-sm font-bold text-slate-700">
                                 {eq.Purchase_Date ? new Date(eq.Purchase_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}

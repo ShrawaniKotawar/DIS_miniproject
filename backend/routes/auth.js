@@ -8,7 +8,7 @@ const router = express.Router();
 
 // POST /api/auth/login
 router.post('/login', async (req, res) => {
-  const { email, password } = req.body;
+  const { email, password, role } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({ message: 'Email and password are required.' });
@@ -25,6 +25,11 @@ router.post('/login', async (req, res) => {
     }
 
     const user = rows[0];
+
+    if (role && user.Role !== role) {
+      return res.status(401).json({ message: `Access denied. Please check your selected login type (${role}).` });
+    }
+
     const isMatch = await bcrypt.compare(password, user.Password);
 
     if (!isMatch) {

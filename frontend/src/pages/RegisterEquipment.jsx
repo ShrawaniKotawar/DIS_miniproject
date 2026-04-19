@@ -1,20 +1,22 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const CATEGORIES = ['Computer', 'Networking', 'Electronics', 'Furniture', 'Other'];
-const STATUSES = ['Active', 'Under Repair', 'Inactive'];
+const CATEGORIES = ['Mouse', 'Keyboard', 'Computer', 'Monitor'];
 
 export default function RegisterEquipment() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    asset_name: '',
-    category: 'Computer',
+    supplier_name: '',
+    category: 'Mouse',
     model: '',
     manufacturer: '',
     unit_price: '',
     quantity: '1',
     purchase_date: new Date().toISOString().split('T')[0],
-    status: 'Active',
+    supplier_email: '',
+    supplier_contact: '',
+    warranty: '',
+    order_no: '',
   });
 
   const totalCost = (parseFloat(form.unit_price) || 0) * (parseInt(form.quantity) || 0);
@@ -25,8 +27,8 @@ export default function RegisterEquipment() {
 
   const handleNext = (e) => {
     e.preventDefault();
-    if (!form.asset_name || !form.unit_price || !form.quantity) {
-      alert('Please fill in Asset Name, Unit Price, and Quantity.');
+    if (!form.supplier_name || !form.unit_price || !form.quantity) {
+      alert('Please fill in Supplier Name, Unit Price, and Quantity.');
       return;
     }
     navigate('/register-equipment/assign', { state: { equipmentData: form } });
@@ -60,13 +62,13 @@ export default function RegisterEquipment() {
         <form onSubmit={handleNext} className="space-y-8 bg-white p-8 lg:p-12 rounded-[2.5rem] shadow-xl shadow-slate-200/50 border border-slate-100">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             <div className="md:col-span-2">
-              <label className="label">Asset Name</label>
+              <label className="label">Supplier Name</label>
               <input
-                name="asset_name"
-                value={form.asset_name}
+                name="supplier_name"
+                value={form.supplier_name}
                 onChange={handleChange}
                 className="input-field"
-                placeholder="e.g. Precision Workstation 3460"
+                placeholder="e.g. Dell India"
                 required
               />
             </div>
@@ -79,10 +81,51 @@ export default function RegisterEquipment() {
             </div>
 
             <div>
-              <label className="label">Status</label>
-              <select name="status" value={form.status} onChange={handleChange} className="input-field cursor-pointer">
-                {STATUSES.map(s => <option key={s}>{s}</option>)}
-              </select>
+              <label className="label">Supplier Email</label>
+              <input
+                name="supplier_email"
+                type="email"
+                value={form.supplier_email}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="contact@supplier.com"
+              />
+            </div>
+
+            <div>
+              <label className="label">Supplier Contact Number</label>
+              <input
+                name="supplier_contact"
+                type="tel"
+                value={form.supplier_contact}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="+91..."
+              />
+            </div>
+
+            <div>
+              <label className="label">Warranty</label>
+              <input
+                name="warranty"
+                type="text"
+                value={form.warranty}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="e.g. 2 years"
+              />
+            </div>
+
+            <div>
+              <label className="label">Order Number</label>
+              <input
+                name="order_no"
+                type="text"
+                value={form.order_no}
+                onChange={handleChange}
+                className="input-field"
+                placeholder="ORD-12345"
+              />
             </div>
 
             <div>
