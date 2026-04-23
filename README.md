@@ -2,10 +2,6 @@
 
 A state-of-the-art, full-stack Laboratory Management System designed for engineering colleges to handle asset tracking, maintenance audits, and departmental financial oversight with a premium, glassmorphism-inspired interface.
 
-![Dashboard Preview](https://img.shields.io/badge/UI-Premium_Glassmorphism-blueviolet)
-![Tech Stack](https://img.shields.io/badge/Stack-React_|_Node_|_MySQL-blue)
-![Budget Tracking](https://img.shields.io/badge/Budget-₹10,00,000_Allocation-emerald)
-
 ## ✨ Features
 
 ###  Department Dashboard
