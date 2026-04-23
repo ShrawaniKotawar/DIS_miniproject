@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 
-const CATEGORIES = ['Mouse', 'Keyboard', 'Computer', 'Monitor'];
+const CATEGORIES = ['Mouse', 'Keyboard', 'Computer Set', 'Monitor', 'Printer', 'Power Cable', 'USB Cable'];
 
 export default function RegisterEquipment() {
   const navigate = useNavigate();

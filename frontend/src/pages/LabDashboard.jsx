@@ -42,6 +42,7 @@ export default function LabDashboard() {
   const [repairTech, setRepairTech] = useState('');
   const [historyModal, setHistoryModal] = useState(null); // { assetId, generatedId, logs: [] }
   const [manageModal, setManageModal] = useState(null); // the batch object
+  const [showMaintenance, setShowMaintenance] = useState(false);
 
   const fetchData = async () => {
     try {
@@ -113,7 +114,7 @@ export default function LabDashboard() {
   const inventorySummary = useMemo(() => {
     const summary = {};
     equipment.forEach(eq => {
-      const name = eq.Asset_Name || 'Unknown';
+      const name = eq.Category || 'Unknown';
       if (!summary[name]) {
         summary[name] = { total: 0, batches: [] };
       }
@@ -178,15 +179,27 @@ export default function LabDashboard() {
                     </div>
                 </div>
 
-                <Link 
-                    to="/register-equipment" 
-                    className="self-start md:self-center px-8 py-4 bg-white text-blue-700 rounded-2xl font-black text-sm uppercase tracking-wider transition-all hover:bg-blue-50 hover:shadow-xl hover:-translate-y-1 active:scale-95 flex items-center gap-3"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                    </svg>
-                    Add Equipment
-                </Link>
+                <div className="flex flex-wrap items-center gap-4">
+                    <button 
+                        onClick={() => setShowMaintenance(true)}
+                        className="px-8 py-4 bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-xl rounded-2xl font-black text-sm uppercase tracking-wider transition-all hover:shadow-xl hover:-translate-y-1 active:scale-95 flex items-center gap-3"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        </svg>
+                        Maintenance Logs
+                    </button>
+
+                    <Link 
+                        to="/register-equipment" 
+                        className="px-8 py-4 bg-white text-blue-700 rounded-2xl font-black text-sm uppercase tracking-wider transition-all hover:bg-blue-50 hover:shadow-xl hover:-translate-y-1 active:scale-95 flex items-center gap-3"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        Add Equipment
+                    </Link>
+                </div>
             </div>
         </div>
 
@@ -546,7 +559,12 @@ export default function LabDashboard() {
                                 <div key={log.Log_ID} className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
                                     <div className="flex justify-between items-start mb-4">
                                         <h4 className="font-bold text-slate-800 text-lg">{log.Issue_Description}</h4>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${log.Status === 'Repaired' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                            log.Status === 'Repaired' ? 'bg-green-100 text-green-600' : 
+                                            log.Status === 'Transferred' ? 'bg-blue-100 text-blue-600' :
+                                            log.Status === 'Scrapped' ? 'bg-slate-100 text-slate-600' :
+                                            'bg-amber-100 text-amber-600'
+                                        }`}>
                                             {log.Status.replace('_', ' ')}
                                         </span>
                                     </div>
@@ -572,6 +590,100 @@ export default function LabDashboard() {
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+        </div>
+      )}
+      {/* Global Maintenance Logs Modal for this Lab */}
+      {showMaintenance && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[3.5rem] p-10 w-full max-w-5xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
+                <div className="flex justify-between items-start mb-10">
+                    <div>
+                        <div className="flex items-center gap-3 mb-2">
+                            <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-black uppercase tracking-widest border border-blue-100">Lab Activity Audit</span>
+                            <span className="text-slate-400 text-sm font-bold">Room {labInfo?.Room_No}</span>
+                        </div>
+                        <h3 className="text-4xl font-black text-slate-900 tracking-tight">Maintenance Records</h3>
+                        <p className="text-slate-500 font-medium mt-1">Audit trail for all equipment repairs and issue reports in this lab.</p>
+                    </div>
+                    <button onClick={() => setShowMaintenance(false)} className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all">
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 pr-4 space-y-6">
+                    {/* Only show history for THIS lab */}
+                    {history.filter(h => String(h.Lab_ID) === String(user?.labId)).length === 0 ? (
+                        <div className="py-20 text-center opacity-40">
+                             <svg className="w-20 h-20 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                             <p className="text-xl font-black tracking-tight">No maintenance records found for this lab</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                            {history.filter(h => String(h.Lab_ID) === String(user?.labId)).map(log => (
+                                <div key={log.Log_ID} className="group bg-slate-50 hover:bg-blue-50/30 rounded-3xl p-8 border border-slate-100 hover:border-blue-100 transition-all">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-3">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                                    log.Status === 'Repaired' ? 'bg-green-100 text-green-600' : 
+                                                    log.Status === 'Transferred' ? 'bg-blue-100 text-blue-600' :
+                                                    log.Status === 'Scrapped' ? 'bg-slate-100 text-slate-600' :
+                                                    'bg-amber-100 text-amber-600'
+                                                }`}>
+                                                    {log.Status.replace('_', ' ')}
+                                                </span>
+                                                <span className="text-xs font-black text-slate-400">#LOG-{log.Log_ID}</span>
+                                            </div>
+                                            <h4 className="text-xl font-black text-slate-900 group-hover:text-blue-600 transition-colors uppercase tracking-tight mt-2">{log.Asset_Name}</h4>
+                                            <p className="text-sm font-bold text-slate-500 mt-1 flex items-center gap-2">
+                                                <span className="text-slate-400">Unit Tracking ID:</span> 
+                                                <span className="bg-white px-2 py-0.5 rounded-lg border border-slate-200 text-slate-900">{log.Generated_ID}</span>
+                                            </p>
+                                        </div>
+
+                                        <div className="flex flex-col md:items-end text-left md:text-right gap-1">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                {log.Status === 'Repaired' ? 'Resolution' : 
+                                                 log.Status === 'Transferred' ? 'Movement Details' :
+                                                 log.Status === 'Scrapped' ? 'Decommissioning' :
+                                                 'Problem Description'}
+                                            </p>
+                                            <p className="text-sm font-black text-slate-800 bg-white px-4 py-2 rounded-xl border border-slate-100 italic">"{log.Issue_Description}"</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-8 pt-6 border-t border-slate-200/50">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported On</p>
+                                            <p className="text-sm font-bold text-slate-700">{new Date(log.Reported_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Resolution Date</p>
+                                            <p className="text-sm font-bold text-slate-700">{log.Repair_Date ? new Date(log.Repair_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Awaiting Repair'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Assigned Tech</p>
+                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[150px]">{log.Technician_Name || 'None Assigned'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Repair Cost</p>
+                                            <p className={`text-sm font-black ${log.Repair_Cost ? 'text-red-600' : 'text-slate-300'}`}>{log.Repair_Cost ? `${fmt(log.Repair_Cost)}` : '—'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-slate-100 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                    <span>Secure Lab Logging System</span>
+                    <span className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
+                        Encrypted Connection
+                    </span>
                 </div>
             </div>
         </div>

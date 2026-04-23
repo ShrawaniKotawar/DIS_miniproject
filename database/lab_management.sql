@@ -7,6 +7,7 @@ CREATE DATABASE IF NOT EXISTS lab_management_db;
 USE lab_management_db;
 
 -- Drop tables in reverse FK order
+DROP TABLE IF EXISTS MaintenanceLog;
 DROP TABLE IF EXISTS EquipmentAsset;
 DROP TABLE IF EXISTS Users;
 DROP TABLE IF EXISTS Lab;
@@ -57,6 +58,7 @@ CREATE TABLE Users (
 CREATE TABLE EquipmentAsset (
   Asset_ID INT PRIMARY KEY AUTO_INCREMENT,
   Asset_Name VARCHAR(100),
+  Supplier_Name VARCHAR(100),
   Category VARCHAR(50),
   Model VARCHAR(100),
   Manufacturer VARCHAR(100),
@@ -64,8 +66,13 @@ CREATE TABLE EquipmentAsset (
   Quantity INT,
   Total_Cost DECIMAL(12,2),
   Purchase_Date DATE,
-  Status VARCHAR(50),
+  Supplier_Email VARCHAR(100),
+  Supplier_Contact VARCHAR(20),
+  Warranty VARCHAR(100),
+  Order_No VARCHAR(100),
+  Status VARCHAR(50) DEFAULT 'Active',
   Lab_ID INT,
+  Generated_ID TEXT,
   FOREIGN KEY (Lab_ID) REFERENCES Lab(Lab_ID)
 );
 
@@ -75,6 +82,7 @@ CREATE TABLE EquipmentAsset (
 CREATE TABLE MaintenanceLog (
   Log_ID INT PRIMARY KEY AUTO_INCREMENT,
   Asset_ID INT,
+  Generated_ID VARCHAR(100),
   Issue_Description TEXT,
   Status VARCHAR(50) DEFAULT 'Issue_Reported',
   Reported_Date DATE,
@@ -99,8 +107,6 @@ INSERT INTO Lab (Room_No, Lab_Name, Lab_Incharge, Lab_Cost, Dept_ID) VALUES
 
 -- Users (passwords are bcrypt of: dept@123 and lab@123)
 -- These will be inserted by the seed script (server/seed.js)
--- Placeholder rows; server/seed.js will hash passwords properly.
--- DO NOT insert raw passwords here.
 
 -- EquipmentAsset
 INSERT INTO EquipmentAsset (Asset_Name, Category, Model, Manufacturer, Unit_Price, Quantity, Total_Cost, Purchase_Date, Status, Lab_ID) VALUES
@@ -114,3 +120,4 @@ INSERT INTO EquipmentAsset (Asset_Name, Category, Model, Manufacturer, Unit_Pric
 ('Soldering Station', 'Tool', 'WSD 81', 'Weller', 8500.00, 10, 85000.00, '2023-11-01', 'Active', 2),
 ('Multimeter', 'Measurement', 'True-RMS 179', 'Fluke', 12000.00, 8, 96000.00, '2023-11-01', 'Active', 2),
 ('Power Supply', 'Power', 'E3634A', 'Keysight', 22000.00, 6, 132000.00, '2024-01-10', 'Under Maintenance', 2);
+

@@ -164,6 +164,7 @@ router.put('/:id/move', authenticateToken, async (req, res) => {
     const moveQuantity = idsToMove.length;
     const unitPrice = parseFloat(asset.Unit_Price);
     const moveCost = unitPrice * moveQuantity;
+    let finalLogAssetId = id;
 
     if (moveQuantity === asset.Quantity || idsToMove.length === currentIds.length) {
       // Full transfer
@@ -194,6 +195,8 @@ router.put('/:id/move', authenticateToken, async (req, res) => {
           asset.Supplier_Contact, asset.Warranty, asset.Order_No, asset.Status, newLabId, idsToMove.join(', ')
         ]
       );
+      const [insertRes] = await connection.query('SELECT LAST_INSERT_ID() as id');
+      finalLogAssetId = insertRes[0].id;
     }
 
     // Update Lab_Cost for old lab
@@ -207,6 +210,29 @@ router.put('/:id/move', authenticateToken, async (req, res) => {
       `UPDATE Lab SET Lab_Cost = Lab_Cost + ? WHERE Lab_ID = ?`,
       [moveCost, newLabId]
     );
+
+    // LOG THE TRANSFER IN MaintenanceLog
+    const [rooms] = await connection.query('SELECT Lab_ID, Room_No FROM Lab WHERE Lab_ID IN (?, ?)', [oldLabId, newLabId]);
+    const oldRoom = rooms.find(r => r.Lab_ID === oldLabId)?.Room_No || oldLabId;
+    const newRoom = rooms.find(r => r.Lab_ID === newLabId)?.Room_No || newLabId;
+
+    for (const tag of idsToMove) {
+      // 1. Log for the destination (Inbound)
+      await connection.query(
+        `INSERT INTO MaintenanceLog (Asset_ID, Generated_ID, Issue_Description, Status, Reported_Date)
+         VALUES (?, ?, ?, 'Transferred', ?)`,
+        [finalLogAssetId, tag, `Internal Transfer: Received from Room ${oldRoom}`, new Date().toISOString().split('T')[0]]
+      );
+
+      // 2. If it was a partial move (finalLogAssetId != id), also log for the source (Outbound)
+      if (finalLogAssetId !== id) {
+        await connection.query(
+          `INSERT INTO MaintenanceLog (Asset_ID, Generated_ID, Issue_Description, Status, Reported_Date)
+           VALUES (?, ?, ?, 'Transferred', ?)`,
+          [id, tag, `Internal Transfer: Sent to Room ${newRoom}`, new Date().toISOString().split('T')[0]]
+        );
+      }
+    }
 
     await connection.commit();
     res.json({ message: 'Equipment moved successfully.' });

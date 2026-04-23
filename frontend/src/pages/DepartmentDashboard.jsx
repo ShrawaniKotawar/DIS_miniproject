@@ -45,6 +45,8 @@ export default function DepartmentDashboard() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [moveTargetLab, setMoveTargetLab] = useState('');
   const [historyModal, setHistoryModal] = useState(null);
+  const [showMaintenance, setShowMaintenance] = useState(false);
+  const [maintenanceLabFilter, setMaintenanceLabFilter] = useState('all');
 
   const fetchData = async () => {
     try {
@@ -84,6 +86,38 @@ export default function DepartmentDashboard() {
     }
   };
 
+  const handleMove = async (assetId, generatedId) => {
+    const targetRoom = window.prompt("Enter Target Room Number (e.g., 301, 302):");
+    if (!targetRoom) return;
+
+    try {
+        const targetLab = labs.find(l => String(l.Room_No) === targetRoom);
+        if (!targetLab) {
+            alert("Invalid Room Number. Choose an existing lab room.");
+            return;
+        }
+
+        await API.put(`/equipment/${assetId}/move`, { newLabId: targetLab.Lab_ID, selectedIds: [generatedId] });
+        alert(`Unit ${generatedId} moved to Room ${targetRoom} successfully.`);
+        setManageModal(null);
+        fetchData();
+    } catch(err) {
+        alert(err.response?.data?.message || 'Error moving equipment');
+    }
+  };
+
+  const handleScrap = async (assetId, generatedId) => {
+    if (!window.confirm(`Are you sure you want to scrap unit ${generatedId}?`)) return;
+    try {
+        await API.post(`/equipment/${assetId}/scrap`, { generatedId });
+        alert(`Unit ${generatedId} marked as scrapped.`);
+        setManageModal(null);
+        fetchData();
+    } catch(err) {
+        alert(err.response?.data?.message || 'Error scrapping equipment');
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -98,10 +132,13 @@ export default function DepartmentDashboard() {
   const uniqueSuppliers = new Set(equipment.map(e => e.Supplier_Name)).size;
   const uniqueCategories = new Set(equipment.map(e => e.Category)).size;
 
+  const TOTAL_BUDGET = 1000000;
+  const budgetRemaining = TOTAL_BUDGET - totalAssetValue;
+
   const inventorySummary = useMemo(() => {
     const summary = {};
     equipment.forEach(eq => {
-      const name = eq.Asset_Name || 'Unknown';
+      const name = eq.Category || 'Unknown';
       if (!summary[name]) {
         summary[name] = { total: 0, batches: [] };
       }
@@ -149,10 +186,20 @@ export default function DepartmentDashboard() {
             </p>
           </div>
           
-          <div className="flex flex-col md:flex-row items-center gap-4">
+          <div className="flex flex-col md:flex-row items-center gap-3">
+              <button 
+                  onClick={() => setShowMaintenance(true)}
+                  className="w-full md:w-auto h-12 px-6 bg-white text-indigo-600 border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-wider transition-all hover:border-indigo-600 hover:shadow-lg active:scale-95 flex items-center justify-center gap-2"
+              >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  Maintenance & History
+              </button>
+
               <Link 
                   to="/register-equipment" 
-                  className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all hover:bg-indigo-700 hover:shadow-xl hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+                  className="w-full md:w-auto h-12 px-6 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-wider transition-all hover:bg-indigo-700 hover:shadow-xl hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
               >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -160,22 +207,22 @@ export default function DepartmentDashboard() {
                   Add Equipment
               </Link>
 
-              <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-200 w-full md:w-auto overflow-x-auto">
+              <div className="flex bg-white p-1 rounded-xl shadow-sm border border-slate-200 w-full md:w-auto overflow-x-auto h-12 items-center">
                 <button 
                     onClick={() => setSelectedLab('all')}
-                className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${selectedLab === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
-            >
-                All Information
-            </button>
-            {labs.map(lab => (
-                <button 
-                    key={lab.Lab_ID}
-                    onClick={() => setSelectedLab(String(lab.Lab_ID))}
-                    className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${selectedLab === String(lab.Lab_ID) ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    className={`px-5 h-full rounded-lg font-bold text-xs transition-all whitespace-nowrap ${selectedLab === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
                 >
-                    {lab.Room_No}
+                    All Labs
                 </button>
-            ))}
+                {labs.map(lab => (
+                    <button 
+                        key={lab.Lab_ID}
+                        onClick={() => setSelectedLab(String(lab.Lab_ID))}
+                        className={`px-5 h-full rounded-lg font-bold text-xs transition-all whitespace-nowrap ${selectedLab === String(lab.Lab_ID) ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
+                    >
+                        {lab.Room_No}
+                    </button>
+                ))}
               </div>
           </div>
         </div>
@@ -195,7 +242,7 @@ export default function DepartmentDashboard() {
         ) : (
           <>
             {/* Stat Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-12">
               <StatCard 
                 label="Total Equipment" 
                 value={totalItems.toLocaleString('en-IN')} 
@@ -204,25 +251,32 @@ export default function DepartmentDashboard() {
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
               />
               <StatCard 
-                label="Total Suppliers" 
-                value={uniqueSuppliers} 
-                sub="Active Vendors"
+                label="Total Categories" 
+                value={uniqueCategories} 
+                sub="Equipment Types"
                 color="text-green-600" 
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
               />
               <StatCard 
-                label="Department Budget" 
-                value={fmt(deptInfo?.Total_Budget)} 
-                sub="Available Funds"
+                label="Total Budget" 
+                value={fmt(TOTAL_BUDGET)} 
+                sub="Annual Allocation"
                 color="text-indigo-600" 
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               />
               <StatCard 
                 label="Total Valuation" 
                 value={fmt(totalAssetValue)} 
-                sub="Est. Replacement cost"
+                sub="Spent on Assets"
                 color="text-blue-600" 
-                icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>}
+              />
+              <StatCard 
+                label="Budget Remaining" 
+                value={fmt(budgetRemaining)} 
+                sub={budgetRemaining < 0 ? "Budget Exceeded!" : "Available for Purchase"}
+                color={budgetRemaining < 0 ? "text-red-600" : "text-emerald-600"}
+                icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               />
             </div>
 
@@ -513,13 +567,12 @@ export default function DepartmentDashboard() {
                                 return (
                                     <div 
                                         key={tag} 
-                                        onClick={() => {
+                                        className={`flex items-center justify-between gap-4 p-4 rounded-2xl border-2 transition-all ${isSelected ? 'bg-indigo-50 border-indigo-500 shadow-md shadow-indigo-100' : 'bg-white border-slate-100'}`}
+                                    >
+                                        <div className="flex items-center gap-4 cursor-pointer" onClick={() => {
                                             if (isSelected) setSelectedIds(selectedIds.filter(id => id !== tag));
                                             else setSelectedIds([...selectedIds, tag]);
-                                        }}
-                                        className={`flex items-center justify-between gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'bg-indigo-50 border-indigo-500 shadow-md shadow-indigo-100' : 'bg-white border-slate-100 hover:border-slate-300'}`}
-                                    >
-                                        <div className="flex items-center gap-4">
+                                        }}>
                                             <div className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-300 text-transparent'}`}>
                                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                                             </div>
@@ -532,18 +585,35 @@ export default function DepartmentDashboard() {
                                             </div>
                                         </div>
                                         
-                                        <button 
-                                            type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                const assetLogs = history.filter(h => h.Asset_ID === manageModal.Asset_ID && h.Generated_ID === tag);
-                                                setHistoryModal({ assetId: manageModal.Asset_ID, generatedId: tag, assetName: manageModal.Asset_Name, logs: assetLogs });
-                                            }}
-                                            className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-200 hover:text-slate-600 transition-colors"
-                                            title="View Unit History"
-                                        >
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleMove(manageModal.Asset_ID, tag)}
+                                                className="px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+                                                title="Transfer Unit"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => handleScrap(manageModal.Asset_ID, tag)}
+                                                className="px-3 py-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+                                                title="Scrap Unit"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                            </button>
+                                            <button 
+                                                type="button"
+                                                onClick={() => {
+                                                    const assetLogs = history.filter(h => h.Asset_ID === manageModal.Asset_ID && h.Generated_ID === tag);
+                                                    setHistoryModal({ assetId: manageModal.Asset_ID, generatedId: tag, assetName: manageModal.Asset_Name, logs: assetLogs });
+                                                }}
+                                                className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                                                title="View Unit History"
+                                            >
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -579,7 +649,12 @@ export default function DepartmentDashboard() {
                                 <div key={log.Log_ID} className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
                                     <div className="flex justify-between items-start mb-4">
                                         <h4 className="font-bold text-slate-800 text-lg">{log.Issue_Description}</h4>
-                                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${log.Status === 'Repaired' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                            log.Status === 'Repaired' ? 'bg-green-100 text-green-600' : 
+                                            log.Status === 'Transferred' ? 'bg-blue-100 text-blue-600' :
+                                            log.Status === 'Scrapped' ? 'bg-slate-100 text-slate-600' :
+                                            'bg-amber-100 text-amber-600'
+                                        }`}>
                                             {log.Status.replace('_', ' ')}
                                         </span>
                                     </div>
@@ -605,6 +680,114 @@ export default function DepartmentDashboard() {
                             ))}
                         </div>
                     )}
+                </div>
+            </div>
+        </div>
+      )}
+      {/* Maintenance Global History Modal */}
+      {showMaintenance && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-[3rem] p-10 w-full max-w-6xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col border border-slate-100">
+                <div className="flex justify-between items-start mb-10">
+                    <div>
+                        <h3 className="text-4xl font-black text-slate-900 tracking-tight">Maintenance & Logs</h3>
+                        <p className="text-slate-500 font-medium mt-1">Audit trail for all equipment repairs and issue reports.</p>
+                        
+                        <div className="flex items-center gap-2 mt-6">
+                            <button 
+                                onClick={() => setMaintenanceLabFilter('all')}
+                                className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${maintenanceLabFilter === 'all' ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-300'}`}
+                            >
+                                All History
+                            </button>
+                            {labs.map(l => (
+                                <button 
+                                    key={l.Lab_ID}
+                                    onClick={() => setMaintenanceLabFilter(String(l.Lab_ID))}
+                                    className={`px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border transition-all ${maintenanceLabFilter === String(l.Lab_ID) ? 'bg-indigo-600 text-white border-indigo-600 shadow-lg shadow-indigo-200' : 'bg-slate-50 text-slate-400 border-slate-100 hover:border-slate-300'}`}
+                                >
+                                    Room {l.Room_No}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <button onClick={() => setShowMaintenance(false)} className="w-14 h-14 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all">
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+
+                <div className="overflow-y-auto flex-1 pr-4 space-y-6">
+                    {history.filter(h => maintenanceLabFilter === 'all' || String(h.Lab_ID) === maintenanceLabFilter).length === 0 ? (
+                        <div className="py-20 text-center opacity-40">
+                             <svg className="w-20 h-20 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                             <p className="text-xl font-black tracking-tight">No maintenance records found for this selection</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-4">
+                            {history.filter(h => maintenanceLabFilter === 'all' || String(h.Lab_ID) === maintenanceLabFilter).map(log => (
+                                <div key={log.Log_ID} className="group bg-slate-50 hover:bg-indigo-50/30 rounded-3xl p-8 border border-slate-100 hover:border-indigo-100 transition-all">
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-3">
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+                                                    log.Status === 'Repaired' ? 'bg-green-100 text-green-600' : 
+                                                    log.Status === 'Transferred' ? 'bg-blue-100 text-blue-600' :
+                                                    log.Status === 'Scrapped' ? 'bg-slate-100 text-slate-600' :
+                                                    'bg-amber-100 text-amber-600'
+                                                }`}>
+                                                    {log.Status.replace('_', ' ')}
+                                                </span>
+                                                <span className="text-xs font-black text-slate-400">#LOG-{log.Log_ID}</span>
+                                            </div>
+                                            <h4 className="text-xl font-black text-slate-900 group-hover:text-indigo-600 transition-colors uppercase tracking-tight mt-2">{log.Asset_Name}</h4>
+                                            <div className="flex items-center gap-3 text-sm font-bold text-slate-500 mt-1">
+                                                <span className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-blue-400"></div> Room {log.Room_No}</span>
+                                                <span className="w-1.5 h-1.5 bg-slate-200 rounded-full"></span>
+                                                <span className="text-slate-400">Unit ID: {log.Generated_ID}</span>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-col md:items-end text-left md:text-right gap-1">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                                {log.Status === 'Repaired' ? 'Resolution' : 
+                                                 log.Status === 'Transferred' ? 'Movement Details' :
+                                                 log.Status === 'Scrapped' ? 'Decommissioning' :
+                                                 'Pending Action'}
+                                            </p>
+                                            <p className="text-sm font-black text-slate-800 leading-tight bg-white px-4 py-2 rounded-xl shadow-sm border border-slate-100 italic">{log.Issue_Description}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-8 pt-6 border-t border-slate-200/50">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Incident Date</p>
+                                            <p className="text-sm font-bold text-slate-700">{new Date(log.Reported_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Update</p>
+                                            <p className="text-sm font-bold text-slate-700">{log.Repair_Date ? new Date(log.Repair_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'In Progress'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Service Personnel</p>
+                                            <p className="text-sm font-bold text-slate-700 truncate max-w-[150px]">{log.Technician_Name || 'Awaiting Tech'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Financial Impact</p>
+                                            <p className={`text-sm font-black ${log.Repair_Cost ? 'text-red-600' : 'text-slate-300'}`}>{log.Repair_Cost ? `- ${fmt(log.Repair_Cost)}` : '—'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                <div className="mt-8 pt-8 border-t border-slate-100 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
+                    <span>Audit System Active</span>
+                    <span className="flex items-center gap-2">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
+                        Live Data Streaming
+                    </span>
                 </div>
             </div>
         </div>

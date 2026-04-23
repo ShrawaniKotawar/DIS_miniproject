@@ -99,10 +99,11 @@ router.post('/repair', authenticateToken, async (req, res) => {
 router.get('/', authenticateToken, async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT m.*, e.Asset_Name, e.Lab_ID, l.Room_No, l.Dept_ID
+      `SELECT m.*, COALESCE(e.Asset_Name, 'Deleted/Scrapped Asset') as Asset_Name, 
+              COALESCE(e.Lab_ID, 0) as Lab_ID, l.Room_No, l.Dept_ID
        FROM MaintenanceLog m
-       JOIN EquipmentAsset e ON m.Asset_ID = e.Asset_ID
-       JOIN Lab l ON e.Lab_ID = l.Lab_ID
+       LEFT JOIN EquipmentAsset e ON m.Asset_ID = e.Asset_ID
+       LEFT JOIN Lab l ON e.Lab_ID = l.Lab_ID
        ORDER BY m.Reported_Date DESC, m.Log_ID DESC`
     );
     res.json(rows);
