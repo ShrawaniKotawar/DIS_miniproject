@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import API from '../api';
 import { useAuth } from '../context/AuthContext';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 function StatCard({ label, value, sub, color, icon }) {
   return (
@@ -32,25 +34,57 @@ export default function DepartmentDashboard() {
   const { user } = useAuth();
   const [labs, setLabs] = useState([]);
   const [equipment, setEquipment] = useState([]);
+  const [deptInfo, setDeptInfo] = useState(null);
+  const [history, setHistory] = useState([]);
   const [selectedLab, setSelectedLab] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  // Modal States
+  const [manageModal, setManageModal] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [moveTargetLab, setMoveTargetLab] = useState('');
+  const [historyModal, setHistoryModal] = useState(null);
+
+  const fetchData = async () => {
+    try {
+      const [labRes, eqRes, deptRes, histRes] = await Promise.all([
+        API.get('/labs'),
+        API.get('/equipment'),
+        API.get('/departments'),
+        API.get('/history')
+      ]);
+      setLabs(labRes.data);
+      setEquipment(eqRes.data);
+      if (deptRes.data.length > 0) setDeptInfo(deptRes.data[0]);
+      setHistory(histRes.data);
+    } catch (err) {
+      setError('Failed to load data. Please refresh.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMoveAsset = async (e) => {
+    e.preventDefault();
+    if (selectedIds.length === 0) return alert('Please select at least one unit to transfer.');
+    if (!moveTargetLab) return alert('Please select a destination lab.');
+
+    try {
+      await API.put(`/equipment/${manageModal.Asset_ID}/move`, { 
+        newLabId: parseInt(moveTargetLab), 
+        selectedIds: selectedIds 
+      });
+      setManageModal(null);
+      setSelectedIds([]);
+      setMoveTargetLab('');
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error moving equipment');
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [labRes, eqRes] = await Promise.all([
-          API.get('/labs'),
-          API.get('/equipment'),
-        ]);
-        setLabs(labRes.data);
-        setEquipment(eqRes.data);
-      } catch (err) {
-        setError('Failed to load data. Please refresh.');
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchData();
   }, []);
 
@@ -63,6 +97,38 @@ export default function DepartmentDashboard() {
   const totalItems = equipment.reduce((s, e) => s + parseInt(e.Quantity || 0), 0);
   const uniqueSuppliers = new Set(equipment.map(e => e.Supplier_Name)).size;
   const uniqueCategories = new Set(equipment.map(e => e.Category)).size;
+
+  const inventorySummary = useMemo(() => {
+    const summary = {};
+    equipment.forEach(eq => {
+      const name = eq.Asset_Name || 'Unknown';
+      if (!summary[name]) {
+        summary[name] = { total: 0, batches: [] };
+      }
+      summary[name].total += eq.Quantity;
+      summary[name].batches.push({
+        date: eq.Purchase_Date ? new Date(eq.Purchase_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Unknown',
+        qty: eq.Quantity
+      });
+    });
+
+    Object.keys(summary).forEach(name => {
+      const consolidatedBatches = {};
+      summary[name].batches.forEach(b => {
+        consolidatedBatches[b.date] = (consolidatedBatches[b.date] || 0) + b.qty;
+      });
+      summary[name].batches = Object.entries(consolidatedBatches).map(([date, qty]) => ({ date, qty }));
+    });
+
+    return summary;
+  }, [equipment]);
+
+  const chartData = Object.keys(inventorySummary).map(name => ({
+    name,
+    total: inventorySummary[name].total
+  }));
+
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6'];
 
   return (
     <div className="min-h-screen bg-[#f8fafc] font-['Outfit'] pb-20 selection:bg-blue-100">
@@ -83,9 +149,20 @@ export default function DepartmentDashboard() {
             </p>
           </div>
           
-          <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-200">
-            <button 
-                onClick={() => setSelectedLab('all')}
+          <div className="flex flex-col md:flex-row items-center gap-4">
+              <Link 
+                  to="/register-equipment" 
+                  className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white rounded-xl font-black text-xs uppercase tracking-wider transition-all hover:bg-indigo-700 hover:shadow-xl hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-2"
+              >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Equipment
+              </Link>
+
+              <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-200 w-full md:w-auto overflow-x-auto">
+                <button 
+                    onClick={() => setSelectedLab('all')}
                 className={`px-6 py-2.5 rounded-xl font-bold text-sm transition-all ${selectedLab === 'all' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-500 hover:bg-slate-50'}`}
             >
                 All Information
@@ -99,6 +176,7 @@ export default function DepartmentDashboard() {
                     {lab.Room_No}
                 </button>
             ))}
+              </div>
           </div>
         </div>
 
@@ -133,11 +211,11 @@ export default function DepartmentDashboard() {
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
               />
               <StatCard 
-                label="Categories" 
-                value={uniqueCategories} 
-                sub="Asset Types"
-                color="text-amber-500" 
-                icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                label="Department Budget" 
+                value={fmt(deptInfo?.Total_Budget)} 
+                sub="Available Funds"
+                color="text-indigo-600" 
+                icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               />
               <StatCard 
                 label="Total Valuation" 
@@ -147,6 +225,49 @@ export default function DepartmentDashboard() {
                 icon={<svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
               />
             </div>
+
+            {/* Inventory Analytics Section */}
+            {equipment.length > 0 && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+                  <div className="lg:col-span-2 bg-white rounded-3xl p-8 border border-slate-100 shadow-xl shadow-slate-200/40">
+                      <h3 className="text-xl font-black text-slate-800 mb-6 uppercase tracking-widest">Inventory Distribution</h3>
+                      <div className="h-64 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={chartData}>
+                                  <XAxis dataKey="name" tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                                  <YAxis tick={{fontSize: 10, fill: '#94a3b8'}} axisLine={false} tickLine={false} />
+                                  <Tooltip cursor={{fill: '#f8fafc'}} contentStyle={{borderRadius: '16px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'}} />
+                                  <Bar dataKey="total" radius={[6, 6, 0, 0]}>
+                                      {chartData.map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                      ))}
+                                  </Bar>
+                              </BarChart>
+                          </ResponsiveContainer>
+                      </div>
+                  </div>
+                  <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-xl shadow-slate-200/40 max-h-[400px] overflow-y-auto">
+                      <h3 className="text-xl font-black text-slate-800 mb-6 uppercase tracking-widest">Purchase Breakdown</h3>
+                      <div className="space-y-6">
+                          {Object.keys(inventorySummary).map(name => (
+                              <div key={name}>
+                                  <div className="flex justify-between items-center mb-2">
+                                      <h4 className="font-bold text-slate-700 text-sm">{name}</h4>
+                                      <span className="px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-xs font-black">Total: {inventorySummary[name].total}</span>
+                                  </div>
+                                  <ul className="space-y-2 pl-4 border-l-2 border-slate-100">
+                                      {inventorySummary[name].batches.map((batch, i) => (
+                                          <li key={i} className="text-xs text-slate-500 font-medium">
+                                              <span className="text-slate-700 font-bold">{batch.qty} units</span> purchased on {batch.date}
+                                          </li>
+                                      ))}
+                                  </ul>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              </div>
+            )}
 
             {/* Labs Overview Section */}
             <div className="mb-12">
@@ -232,7 +353,7 @@ export default function DepartmentDashboard() {
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-slate-50/50">
-                      {['Supplier Details','Specs & Model','Location','Inventory','Value','Order Details','Date Added'].map((h) => (
+                      {['Supplier Details','Specs & Model','Location','Inventory','Value','Order Details','Date Added', 'Actions'].map((h) => (
                         <th key={h} className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] whitespace-nowrap">
                           {h}
                         </th>
@@ -267,18 +388,11 @@ export default function DepartmentDashboard() {
                               </div>
                               <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase tracking-widest truncate max-w-[120px]">{eq.Lab_Name}</p>
                           </td>
-                          <td className="px-8 py-6">
+                          <td className="px-8 py-6 align-middle">
                               <div className="bg-slate-100/80 px-4 py-1.5 rounded-lg inline-flex items-center gap-2">
                                   <span className="text-sm font-black text-slate-900">{eq.Quantity}</span>
                                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Units</span>
                               </div>
-                              {eq.Generated_ID && (
-                                  <div className="mt-2 space-y-1">
-                                      {eq.Generated_ID.split(', ').map((tag, i) => (
-                                          <p key={i} className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-white inline-block px-1 rounded border border-slate-100">{tag}</p>
-                                      ))}
-                                  </div>
-                              )}
                           </td>
                           <td className="px-8 py-6">
                               <p className="text-lg font-black text-slate-900 tracking-tighter">{fmt(eq.Total_Cost)}</p>
@@ -292,6 +406,23 @@ export default function DepartmentDashboard() {
                               <p className="text-sm font-bold text-slate-700">
                                 {eq.Purchase_Date ? new Date(eq.Purchase_Date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                               </p>
+                          </td>
+                          <td className="px-8 py-6 align-middle">
+                            {eq.Generated_ID ? (
+                                <button 
+                                    onClick={() => {
+                                        setManageModal(eq);
+                                        setSelectedIds([]);
+                                        setMoveTargetLab('');
+                                    }}
+                                    className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white hover:bg-indigo-700 hover:shadow-lg hover:shadow-indigo-600/20 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all active:scale-95"
+                                >
+                                    Manage {eq.Quantity} Units
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                </button>
+                            ) : (
+                                <span className="text-xs font-bold text-slate-400">No Units</span>
+                            )}
                           </td>
                         </tr>
                       ))
@@ -310,6 +441,174 @@ export default function DepartmentDashboard() {
           </>
         )}
       </main>
+
+      {/* Manage Units Modal */}
+      {manageModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-5xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <div className="flex items-center gap-3 mb-1">
+                            <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black uppercase tracking-widest">{manageModal.Category}</span>
+                            <span className="text-slate-400 text-sm font-bold">Currently in Room {manageModal.Room_No}</span>
+                        </div>
+                        <h3 className="text-3xl font-black text-slate-900 tracking-tight">{manageModal.Asset_Name || manageModal.Model || 'Equipment Batch'}</h3>
+                        <p className="text-sm font-bold text-slate-400 mt-1 uppercase tracking-widest">{manageModal.Supplier_Name}</p>
+                    </div>
+                    <button onClick={() => setManageModal(null)} className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <form onSubmit={handleMoveAsset} className="flex-1 overflow-hidden flex flex-col">
+                    <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 mb-6 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="flex-1">
+                            <h4 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-2">Transfer Equipment</h4>
+                            <p className="text-xs font-bold text-slate-500">Select units from the list below and choose a destination lab to transfer them.</p>
+                        </div>
+                        <div className="flex-1 min-w-[250px]">
+                            <select 
+                                value={moveTargetLab}
+                                onChange={(e) => setMoveTargetLab(e.target.value)}
+                                className="w-full bg-white border border-slate-200 rounded-xl p-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none shadow-sm"
+                            >
+                                <option value="" disabled>Select Destination Lab...</option>
+                                {labs.filter(l => String(l.Lab_ID) !== String(manageModal.Lab_ID)).map(l => (
+                                    <option key={l.Lab_ID} value={l.Lab_ID}>Room {l.Room_No} - {l.Lab_Name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <button 
+                                type="submit" 
+                                disabled={selectedIds.length === 0 || !moveTargetLab}
+                                className="w-full md:w-auto px-6 py-3 bg-indigo-600 text-white disabled:bg-slate-300 disabled:shadow-none rounded-xl font-black uppercase tracking-wider text-xs transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                            >
+                                Transfer {selectedIds.length > 0 ? selectedIds.length : ''} Units
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-y-auto flex-1 pr-4 space-y-3">
+                        <div className="flex items-center justify-between mb-2 px-2">
+                            <span className="text-xs font-black text-slate-400 uppercase tracking-widest">{manageModal.Quantity} Total Units</span>
+                            <button 
+                                type="button"
+                                onClick={() => {
+                                    const allIds = manageModal.Generated_ID.split(', ');
+                                    if (selectedIds.length === allIds.length) setSelectedIds([]);
+                                    else setSelectedIds(allIds);
+                                }}
+                                className="text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+                            >
+                                {selectedIds.length === manageModal.Generated_ID.split(', ').length ? 'Deselect All' : 'Select All'}
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {manageModal.Generated_ID.split(', ').map(tag => {
+                                const activeLog = history.find(h => h.Asset_ID === manageModal.Asset_ID && h.Generated_ID === tag && h.Status === 'Issue_Reported');
+                                const isSelected = selectedIds.includes(tag);
+                                
+                                return (
+                                    <div 
+                                        key={tag} 
+                                        onClick={() => {
+                                            if (isSelected) setSelectedIds(selectedIds.filter(id => id !== tag));
+                                            else setSelectedIds([...selectedIds, tag]);
+                                        }}
+                                        className={`flex items-center justify-between gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all ${isSelected ? 'bg-indigo-50 border-indigo-500 shadow-md shadow-indigo-100' : 'bg-white border-slate-100 hover:border-slate-300'}`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-6 h-6 rounded flex items-center justify-center border-2 transition-colors ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-300 text-transparent'}`}>
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-slate-800 tracking-wide text-sm">{tag}</p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${activeLog ? 'bg-amber-500 animate-pulse' : 'bg-green-500'}`}></span>
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{activeLog ? 'Needs Repair' : 'Healthy'}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <button 
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                const assetLogs = history.filter(h => h.Asset_ID === manageModal.Asset_ID && h.Generated_ID === tag);
+                                                setHistoryModal({ assetId: manageModal.Asset_ID, generatedId: tag, assetName: manageModal.Asset_Name, logs: assetLogs });
+                                            }}
+                                            className="w-8 h-8 rounded-full bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-slate-200 hover:text-slate-600 transition-colors"
+                                            title="View Unit History"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        </button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* History Modal */}
+      {historyModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-4xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                <div className="flex justify-between items-center mb-6">
+                    <div>
+                        <h3 className="text-2xl font-black text-slate-900">Maintenance History</h3>
+                        <p className="text-slate-500 text-sm mt-1">{historyModal.assetName} (Unit: {historyModal.generatedId})</p>
+                    </div>
+                    <button onClick={() => setHistoryModal(null)} className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+                
+                <div className="overflow-y-auto flex-1 pr-2">
+                    {historyModal.logs.length === 0 ? (
+                        <div className="text-center py-12">
+                            <p className="text-slate-400 font-bold">No maintenance history recorded for this asset.</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {historyModal.logs.map(log => (
+                                <div key={log.Log_ID} className="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <h4 className="font-bold text-slate-800 text-lg">{log.Issue_Description}</h4>
+                                        <span className={`px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${log.Status === 'Repaired' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                            {log.Status.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4 pt-4 border-t border-slate-200">
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Reported On</p>
+                                            <p className="text-sm font-bold text-slate-700">{new Date(log.Reported_Date).toLocaleDateString('en-GB')}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Repaired On</p>
+                                            <p className="text-sm font-bold text-slate-700">{log.Repair_Date ? new Date(log.Repair_Date).toLocaleDateString('en-GB') : '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Technician</p>
+                                            <p className="text-sm font-bold text-slate-700">{log.Technician_Name || '—'}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Repair Cost</p>
+                                            <p className="text-sm font-bold text-slate-700">{log.Repair_Cost ? `₹${log.Repair_Cost}` : '—'}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+      )}
     </div>
   );
 }

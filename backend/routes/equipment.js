@@ -58,8 +58,11 @@ router.post('/', async (req, res) => {
     quantity,
     labId,
     // New array support
-    assignments = []
+    assignments = [],
+    asset_name
   } = req.body;
+
+  const finalAssetName = asset_name || model || category || 'Unknown Equipment';
 
   let assignedLabs = assignments;
   if (assignedLabs.length === 0 && labId && quantity) {
@@ -96,9 +99,9 @@ router.post('/', async (req, res) => {
 
       const [result] = await db.query(
         `INSERT INTO EquipmentAsset
-          (Supplier_Name, Category, Model, Manufacturer, Unit_Price, Quantity, Total_Cost, Purchase_Date, Supplier_Email, Supplier_Contact, Warranty, Order_No, Lab_ID, Generated_ID)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [supplier_name, category, model, manufacturer, unit_price, allocQty, total_cost, purchase_date, supplier_email, supplier_contact, warranty, order_no, allocLabId, generatedIdsStr]
+          (Asset_Name, Supplier_Name, Category, Model, Manufacturer, Unit_Price, Quantity, Total_Cost, Purchase_Date, Supplier_Email, Supplier_Contact, Warranty, Order_No, Lab_ID, Generated_ID)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [finalAssetName, supplier_name, category, model, manufacturer, unit_price, allocQty, total_cost, purchase_date, supplier_email, supplier_contact, warranty, order_no, allocLabId, generatedIdsStr]
       );
 
       const [newAsset] = await db.query(
@@ -115,6 +118,180 @@ router.post('/', async (req, res) => {
   } catch (err) {
     console.error('Add equipment error:', err);
     res.status(500).json({ message: 'Server error registering equipment.' });
+  }
+});
+
+// PUT /api/equipment/:id/move — Move equipment from one lab to another
+router.put('/:id/move', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { newLabId, selectedIds } = req.body;
+
+  if (!newLabId || !selectedIds || !Array.isArray(selectedIds) || selectedIds.length === 0) {
+    return res.status(400).json({ message: 'New Lab ID and selected IDs array are required.' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    // Get current asset details
+    const [assetRows] = await connection.query(
+      `SELECT * FROM EquipmentAsset WHERE Asset_ID = ?`,
+      [id]
+    );
+
+    if (assetRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Equipment not found.' });
+    }
+
+    const asset = assetRows[0];
+    const oldLabId = asset.Lab_ID;
+
+    if (oldLabId === newLabId) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'Equipment is already in the specified lab.' });
+    }
+
+    const currentIds = asset.Generated_ID ? asset.Generated_ID.split(', ') : [];
+    const idsToMove = selectedIds.filter(sid => currentIds.includes(sid));
+
+    if (idsToMove.length === 0) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'None of the selected IDs belong to this equipment batch.' });
+    }
+
+    const moveQuantity = idsToMove.length;
+    const unitPrice = parseFloat(asset.Unit_Price);
+    const moveCost = unitPrice * moveQuantity;
+
+    if (moveQuantity === asset.Quantity || idsToMove.length === currentIds.length) {
+      // Full transfer
+      await connection.query(
+        `UPDATE EquipmentAsset SET Lab_ID = ? WHERE Asset_ID = ?`,
+        [newLabId, id]
+      );
+    } else {
+      // Partial transfer
+      const remainingIds = currentIds.filter(sid => !idsToMove.includes(sid));
+      const remainingQty = remainingIds.length;
+      const remainingCost = unitPrice * remainingQty;
+
+      // Update old asset
+      await connection.query(
+        `UPDATE EquipmentAsset SET Quantity = ?, Total_Cost = ?, Generated_ID = ? WHERE Asset_ID = ?`,
+        [remainingQty, remainingCost, remainingIds.join(', '), id]
+      );
+
+      // Create new asset for the new lab
+      await connection.query(
+        `INSERT INTO EquipmentAsset 
+         (Asset_Name, Supplier_Name, Category, Model, Manufacturer, Unit_Price, Quantity, Total_Cost, Purchase_Date, Supplier_Email, Supplier_Contact, Warranty, Order_No, Status, Lab_ID, Generated_ID)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          asset.Asset_Name, asset.Supplier_Name, asset.Category, asset.Model, asset.Manufacturer, 
+          asset.Unit_Price, moveQuantity, moveCost, asset.Purchase_Date, asset.Supplier_Email, 
+          asset.Supplier_Contact, asset.Warranty, asset.Order_No, asset.Status, newLabId, idsToMove.join(', ')
+        ]
+      );
+    }
+
+    // Update Lab_Cost for old lab
+    await connection.query(
+      `UPDATE Lab SET Lab_Cost = Lab_Cost - ? WHERE Lab_ID = ?`,
+      [moveCost, oldLabId]
+    );
+
+    // Update Lab_Cost for new lab
+    await connection.query(
+      `UPDATE Lab SET Lab_Cost = Lab_Cost + ? WHERE Lab_ID = ?`,
+      [moveCost, newLabId]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Equipment moved successfully.' });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Move equipment error:', err);
+    res.status(500).json({ message: 'Server error moving equipment.' });
+  } finally {
+    connection.release();
+  }
+});
+
+// PUT /api/equipment/:id/scrap — Scrap a specific unit
+router.put('/:id/scrap', authenticateToken, async (req, res) => {
+  const { id } = req.params;
+  const { generatedId } = req.body;
+
+  if (!generatedId) {
+    return res.status(400).json({ message: 'Generated ID to scrap is required.' });
+  }
+
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [assetRows] = await connection.query(
+      `SELECT * FROM EquipmentAsset WHERE Asset_ID = ?`,
+      [id]
+    );
+
+    if (assetRows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: 'Equipment not found.' });
+    }
+
+    const asset = assetRows[0];
+    const currentIds = asset.Generated_ID ? asset.Generated_ID.split(', ') : [];
+
+    if (!currentIds.includes(generatedId)) {
+      await connection.rollback();
+      return res.status(400).json({ message: 'The specific equipment ID does not belong to this batch.' });
+    }
+
+    const unitPrice = parseFloat(asset.Unit_Price);
+    
+    // Log the scrap in MaintenanceLog
+    await connection.query(
+      `INSERT INTO MaintenanceLog (Asset_ID, Generated_ID, Issue_Description, Status, Reported_Date)
+       VALUES (?, ?, 'Unit scrapped', 'Scrapped', ?)`,
+      [id, generatedId, new Date().toISOString().split('T')[0]]
+    );
+
+    if (currentIds.length === 1) {
+      // It's the last item in the batch. We can either delete the batch or mark it as 0 quantity.
+      // Let's keep it but mark quantity 0 to preserve purchase history.
+      await connection.query(
+        `UPDATE EquipmentAsset SET Quantity = 0, Total_Cost = 0, Generated_ID = '' WHERE Asset_ID = ?`,
+        [id]
+      );
+    } else {
+      // Remove just this item
+      const remainingIds = currentIds.filter(sid => sid !== generatedId);
+      const remainingQty = remainingIds.length;
+      const remainingCost = unitPrice * remainingQty;
+
+      await connection.query(
+        `UPDATE EquipmentAsset SET Quantity = ?, Total_Cost = ?, Generated_ID = ? WHERE Asset_ID = ?`,
+        [remainingQty, remainingCost, remainingIds.join(', '), id]
+      );
+    }
+
+    // Deduct cost from Lab
+    await connection.query(
+      `UPDATE Lab SET Lab_Cost = Lab_Cost - ? WHERE Lab_ID = ?`,
+      [unitPrice, asset.Lab_ID]
+    );
+
+    await connection.commit();
+    res.json({ message: 'Equipment unit scrapped successfully.' });
+  } catch (err) {
+    await connection.rollback();
+    console.error('Scrap equipment error:', err);
+    res.status(500).json({ message: 'Server error scrapping equipment.' });
+  } finally {
+    connection.release();
   }
 });
 

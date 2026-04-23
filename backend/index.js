@@ -13,6 +13,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/equipment', require('./routes/equipment'));
 app.use('/api/labs', require('./routes/labs'));
 app.use('/api/departments', require('./routes/departments'));
+app.use('/api/history', require('./routes/history'));
 
 // Health check
 app.get('/api/health', (req, res) => {
