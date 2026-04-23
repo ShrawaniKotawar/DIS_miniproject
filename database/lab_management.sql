@@ -20,7 +20,8 @@ CREATE TABLE Department (
   Dept_Name VARCHAR(100),
   HOD_Name VARCHAR(100),
   Repair_Budget DECIMAL(10,2),
-  Purchase_Budget DECIMAL(10,2)
+  Purchase_Budget DECIMAL(10,2),
+  Total_Budget DECIMAL(12,2)
 );
 
 -- --------------------------
@@ -61,11 +62,26 @@ CREATE TABLE EquipmentAsset (
   Manufacturer VARCHAR(100),
   Unit_Price DECIMAL(10,2),
   Quantity INT,
-  Total_Cost DECIMAL(10,2),
+  Total_Cost DECIMAL(12,2),
   Purchase_Date DATE,
   Status VARCHAR(50),
   Lab_ID INT,
   FOREIGN KEY (Lab_ID) REFERENCES Lab(Lab_ID)
+);
+
+-- --------------------------
+-- MaintenanceLog
+-- --------------------------
+CREATE TABLE MaintenanceLog (
+  Log_ID INT PRIMARY KEY AUTO_INCREMENT,
+  Asset_ID INT,
+  Issue_Description TEXT,
+  Status VARCHAR(50) DEFAULT 'Issue_Reported',
+  Reported_Date DATE,
+  Repair_Cost DECIMAL(10,2),
+  Repair_Date DATE,
+  Technician_Name VARCHAR(100),
+  FOREIGN KEY (Asset_ID) REFERENCES EquipmentAsset(Asset_ID) ON DELETE CASCADE
 );
 
 -- =============================================================
@@ -73,8 +89,8 @@ CREATE TABLE EquipmentAsset (
 -- =============================================================
 
 -- Department
-INSERT INTO Department (Dept_Name, HOD_Name, Repair_Budget, Purchase_Budget) VALUES
-('Information Technology', 'Dr. Alok Sharma', 150000.00, 500000.00);
+INSERT INTO Department (Dept_Name, HOD_Name, Repair_Budget, Purchase_Budget, Total_Budget) VALUES
+('Information Technology', 'Dr. Alok Sharma', 150000.00, 500000.00, 650000.00);
 
 -- Labs
 INSERT INTO Lab (Room_No, Lab_Name, Lab_Incharge, Lab_Cost, Dept_ID) VALUES
